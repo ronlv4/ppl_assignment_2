@@ -76,5 +76,9 @@ export const safe2 = <T1, T2, T3>(f: (x: T1, y: T2) => Result<T3>): (xr: Result<
     (xr: Result<T1>, yr: Result<T2>) =>
         bind(xr, (x: T1) => bind(yr, (y: T2) => f(x, y)));
 
+export const safe3 = <T1, T2, T3, T4>(f: (x: T1, y: T2, z: T3) => Result<T4>): (xr: Result<T1>, yr: Result<T2>, zr: Result<T3>) => Result<T4> =>
+    (xr: Result<T1>, yr: Result<T2>, zr: Result<T3>) =>
+        bind(xr, (x: T1) => bind(yr, (y: T2) => bind(zr, (z: T3) => f(x, y, z))));
+
 export const resultToOptional = <T>(r: Result<T>): Optional<T> =>
     either(r, makeSome, _ => makeNone());
