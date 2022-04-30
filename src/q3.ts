@@ -7,12 +7,14 @@ import {
     isExp, isIfExp, isLetExp,
     isLetPlusExp, isLitExp,
     isNumExp, isPrimOp, isProcExp,
-    isProgram, isStrExp, isVarRef, makeAppExp, makeBinding,
-    makeDefineExp, makeIfExp, makeLetExp, makeProcExp, makeProgram,
+    isProgram, isStrExp, isVarRef, LetExp, LetPlusExp, makeAppExp, makeBinding,
+    makeDefineExp, makeIfExp, makeLetExp, makeLetPlusExp, makeProcExp, makeProgram,
     Program
 } from "./L31-ast";
 import {Result, makeFailure, bind, mapResult, makeOk, safe2, safe3} from "../shared/result";
 import {map, zipWith} from "ramda";
+import {first, rest} from "../shared/list";
+import exp from "constants";
 
 
 /*
@@ -30,6 +32,10 @@ export const L31ExpToL3 = (exp: Exp): Result<Exp> =>
     isCExp(exp) ? L31CExpToL3(exp):
     makeFailure("unvalid")
 
+export const rewriteLetPlusExp = (cexp: LetPlusExp): LetExp =>
+    cexp.bindings.length == 1 ? makeLetExp(cexp.bindings, cexp.body):
+    makeLetExp([first(cexp.bindings)], [rewriteLetPlusExp(makeLetPlusExp(rest(cexp.bindings),cexp.body))]);
+
 export const L31CExpToL3 = (cexp: CExp): Result<CExp> =>
     isNumExp(cexp) ? makeOk(cexp) :
     isBoolExp(cexp) ? makeOk(cexp) :
@@ -43,6 +49,6 @@ export const L31CExpToL3 = (cexp: CExp): Result<CExp> =>
     isProcExp(cexp) ? bind(mapResult(L31CExpToL3, cexp.body), (body: CExp[]) => makeOk(makeProcExp(cexp.args, body))) :
     isLetExp(cexp) ? safe2((vals : CExp[], body: CExp[]) => makeOk(makeLetExp(zipWith(makeBinding,map(binding => binding.var.var, cexp.bindings), vals), body)))
             (mapResult((binding : Binding ) => L31CExpToL3(binding.val), cexp.bindings), mapResult(L31CExpToL3,cexp.body)) :
-    isLetPlusExp(cexp) ? // @TODO
+    isLetPlusExp(cexp) ? makeOk(rewriteLetPlusExp(cexp)):
     isLitExp(cexp) ? makeOk(cexp) :
-    makeFailure(`Unexpected CExp: ${cexp.tag}`);
+    makeFailure("Unexpected CExp");
