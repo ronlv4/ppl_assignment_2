@@ -1,77 +1,213 @@
+
 (define make-ok
   (lambda (val)
-    @TODO
-  )
- )
- 
-(define make-error
-  (lambda (msg)
-    @TODO
-  )
- )
-
-(define ok?
-  (lambda (res)
-    @TODO
-  )
- )
-
-(define error?
-  (lambda (res)
-    @TODO
-  )
- )
-
-(define result?
-  (lambda (res)
-    @TODO
-  )
- )
-
-(define result->val
-  (lambda (res)
-    @TODO
+    (cons "result" (cons "ok" val))
   )
 )
 
-(define bind 
+(define make-error
+  (lambda (msg)
+    (cons "result" (cons "error" msg))
+  )
+)
+
+(define ok?
+  (lambda (res)
+    (if(pair? res)
+      (if(eq? (car res) "result")
+        (eq? (cadr res) "ok")
+        #f
+      )
+      #f
+    )
+  )
+)
+
+(define error?
+  (lambda (res)
+    (if(pair? res)
+      (if(eq? (car res) "result")
+        (eq? (cadr res) "error")
+        #f
+      )
+      #f
+    )
+  )
+)
+
+(define result?
+  (lambda (res)
+    (if(pair? res)
+      (eq? "result" (car res))
+      #f
+    )
+  )
+)
+
+(define result->val
+  (lambda (res)
+    (cddr res)
+  )
+)
+
+(define bind
   (lambda (f)
-    @TODO
+    (lambda (res)
+      (if(ok? res)
+        (if(result? (f (result->val res)))
+          (f (result->val res))
+          (make-ok result->val res))
+        (make-error (result->val res)))
+    )
   )
 )
 
 (define make-dict
   (lambda ()
-    @TODO
+    (cons "dict" '())
   )
 )
 
 (define dict?
   (lambda (e)
-    @TODO
+    (eq? "dict" (car e))
   )
 )
 
 (define get
-  (lambda (dict k)
-    @TODO
+  (lambda (dict key)
+    (if(dict? dict)
+      (get2 dict key)
+      (make-error "Error: not a dictionary")
+    )
+  )
+)
+
+(define get2
+  (lambda (dict key)
+    (if (empty? dict)
+      (make-error "Key not found")
+      (if(eq? (car dict) "dict")
+        (get2 (cdr dict) key)
+        (if(eq? (caar dict) key)
+          (make-ok (cdar dict))
+          (get2 (cdr dict) key))))
+
   )
 )
 
 (define put
   (lambda (dict k v)
-    @TODO
+    (if(dict? dict)
+      (put2 dict k v)
+      (make-error "Error: not a dictionary")
+    )
+  )
+)
+
+(define put2
+  (lambda (dict k v)
+    (if(error? (get2 dict k))
+      (make-ok (cons "dict" (cons (cons k v) (cdr dict))))
+      (make-ok (cons "dict" (insert2 (cdr dict) k  v)))
+    )
+  )
+)
+
+(define insert2
+  (lambda(dict k v)
+    (if(empty? dict)
+        '()
+      (if(eq? (caar dict) k)
+        (cons (cons k v) (cdr dict))
+        (cons (car dict) (insert2 (cdr dict) k v)))
+    )
   )
 )
 
 (define map-dict
   (lambda (dict f)
-    @TODO
+    (if(dict? dict)
+      (make-ok (cons "dict" (map (cdr dict) f)))
+      (make-error "Error: not a dictionary")
+    )
+  )
+)
+
+(define map
+  (lambda (dict f)
+    (if(empty? dict)
+        '()
+      (cons (cons (caar dict) (f (cdar dict))) (map (cdr dict) f))
+    )
   )
 )
 
 (define filter-dict
   (lambda (dict pred)
-    @TODO
+    (if(dict? dict)
+      (make-ok (cons "dict" (filter (cdr dict) pred)))
+      (make-error "Error: not a dictionary")
+    )
+  )
+)
+
+(define filter
+  (lambda (dict pred)
+    (if(empty? dict)
+        '()
+      (if (pred (caar dict) (cdar dict))
+        (cons (car dict) (filter (cdr dict) pred ))
+        (filter (cdr dict) pred)
+      )
+    )
+  )
+)
+
+(define cadr
+  (lambda (pair)
+    (if (pair? pair)
+      (if (pair? (cdr pair))
+        (car (cdr pair))
+        #f
+      )
+      #f
+    )
+  )
+)
+
+(define cdar
+  (lambda (pair)
+    (if (pair? pair)
+      (if (pair? (car pair))
+        (cdr (car pair))
+        #f
+      )
+      #f
+    )
+  )
+)
+
+(define cddr
+  (lambda (pair)
+    (if (pair? pair)
+      (if (pair? (cdr pair))
+        (cdr (cdr pair))
+        #f
+      )
+      #f
+    )
+  )
+)
+
+(define caar
+  (lambda (pair)
+    (if (pair? pair)
+      (if (pair? (car pair))
+        (car (car pair))
+        #f
+      )
+      #f
+    )
   )
 )
