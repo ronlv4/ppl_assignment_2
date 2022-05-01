@@ -1,49 +1,14 @@
 import { Exp, Program } from '../imp/L3-ast';
 import {Result, makeFailure, bind, mapResult, makeOk, safe2, safe3} from '../shared/result';
 import {
-    Binding,
-    CExp, isAppExp,
-    isBoolExp,
-    isCExp,
-    isDefineExp,
-    isExp, isIfExp, isLetExp, isLetPlusExp, isLitExp,
-    isNumExp, isPrimOp, isProcExp,
-    isProgram,
-    isStrExp, isVarRef, makeAppExp, makeBinding,
-    makeDefineExp, makeIfExp, makeLetExp, makeProcExp,
-    makeProgram, PrimOp
+    AppExp, AtomicExp, CExp, CompoundExp, LetExp, LitExp, PrimOp, ProcExp,
+    isAppExp, isAtomicExp, isBoolExp, isCExp, isCompoundExp, isDefineExp, isExp, isIfExp,
+    isLetExp, isLitExp, isNumExp, isPrimOp, isProcExp, isProgram, isStrExp, isVarRef,
+    makeAppExp, makeProcExp,
 } from "./L31-ast";
-import {L31CExpToL3, L31ExpToL3, rewriteLetPlusExp} from "./q3";
-import {map, zipWith} from "ramda";
+import {map} from "ramda";
+import {isSymbolSExp} from "../imp/L3-value";
 
-export const convertL30ExpToJS = (exp: Exp): Result<string> =>
-    isDefineExp(exp) ? bind(convertL30CExpToJS(exp.val), val => makeOk(`const ${exp.var.var} = ${val}`)) :
-    isCExp(exp) ? convertL30CExpToJS(exp):
-    makeFailure("unvalid exp");
-
-export const convertL30CExpToJS = (cexp: CExp): Result<string> =>
-    isNumExp(cexp) ? makeOk(cexp.val.toString()) :
-    isBoolExp(cexp) ? makeOk(cexp.val ? "true" : "false") :
-    isStrExp(cexp) ? makeOk(cexp.val) :
-    isPrimOp(cexp) ? makeOk(convertPrimOpToJS(cexp.op)) :
-    isVarRef(cexp) ? makeOk(cexp.var) :
-    isIfExp(cexp) ? safe3((test: string, then: string, alt: string) => makeOk(`(${test} ? ${then} : ${alt})`))
-        (convertL30CExpToJS(cexp.test), convertL30CExpToJS(cexp.then), convertL30CExpToJS(cexp.alt)) :
-    isAppExp(cexp) ?
-        (
-            isPrimOp(cexp.rator) ? convertAppPrimOpToJS(cexp.rator, cexp.rands) :
-                safe2((rator: string, rands: string[]) => makeOk(`${rator}(${rands.join(",")})`))
-                (convertL30CExpToJS(cexp.rator), mapResult(convertL30CExpToJS, cexp.rands))
-        ) :
-    // isAppExp(cexp) ? safe2((rator: CExp, rands: CExp[]) => makeOk(makeAppExp(rator, rands)))
-    //     (L31CExpToL3(cexp.rator), mapResult(L31CExpToL3, cexp.rands)) :
-    isProcExp(cexp) ? bind(convertL30CExpToJS(cexp.body[cexp.body.length-1]), body => makeOk("(" + "(" +
-            map((p) => p.var, cexp.args).join(",") + ") => " + body + ")")) :
-
-    // isLetExp(cexp) ? safe2((vals : CExp[], body: CExp[]) => makeOk(convertL30CExpToJS(zipWith(makeBinding,map(binding => binding.var.var, cexp.bindings), vals), body)))
-    //     (mapResult((binding : Binding ) => convertL30CExpToJS(binding.val), cexp.bindings), mapResult(convertL30CExpToJS,cexp.body)) :
-    isLitExp(cexp) ? (makeOk("\\" + cexp + "\\")) :
-    makeFailure("Unexpected CExp");
 
 /*
 Purpose: Transform L3 AST to JavaScript program string
@@ -55,25 +20,82 @@ export const l30ToJS = (exp: Exp | Program): Result<string>  =>
     isExp(exp) ? convertL30ExpToJS(exp):
     makeFailure("unvalid expression");
 
-
 /*
-    ;; <prim-op>  ::= + | - | * | / | < | > | = | not | and | or | eq? | string=?
-    ;;                  | cons | car | cdr | pair? | number? | list
-    ;;                  | boolean? | symbol? | string?      ##### L3
+Purpose: rewrite a single LetExp as a lambda-application form
+Signature: rewriteLet(cexp)
+Type: [LetExp => AppExp]
 */
+export const rewriteLet = (e: LetExp): AppExp => {
+    const vars = map((b) => b.var, e.bindings);
+    const vals = map((b) => b.val, e.bindings);
+    return makeAppExp(
+        makeProcExp(vars, e.body),
+        vals);
+}
+
+export const convertL30ExpToJS = (exp: Exp): Result<string> =>
+    isDefineExp(exp) ? bind(convertL30CExpToJS(exp.val), val => makeOk(`const ${exp.var.var} = ${val}`)) :
+    isCExp(exp) ? convertL30CExpToJS(exp):
+    makeFailure("unvalid exp");
+
+export const convertL30CExpToJS = (cexp: CExp): Result<string> =>
+    isAtomicExp(cexp) ? convertL30AtomicExpToJS(cexp) :
+    isCompoundExp(cexp) ? convertL30CompoundExpToJS(cexp) :
+    makeFailure("Unexpected CExp");
+
+export const convertL30AtomicExpToJS = (aExp: AtomicExp): Result<string> =>
+//    AtomicExp = NumExp | BoolExp | StrExp | PrimOp | VarRef;
+    isNumExp(aExp) ? makeOk(aExp.val.toString()) :
+    isBoolExp(aExp) ? makeOk(aExp.val ? "true" : "false") :
+    isStrExp(aExp) ? makeOk('"' + aExp.val + '"') :
+    isPrimOp(aExp) ? makeOk(convertPrimOpToJS(aExp.op)) :
+    isVarRef(aExp) ? makeOk(aExp.var) :
+    aExp
+
+export const convertL30CompoundExpToJS = (compExp: CompoundExp): Result<string> =>
+    //CompoundExp = AppExp | IfExp | ProcExp | LetExp | LetPlusExp | LitExp;
+    isIfExp(compExp) ? safe3((test: string, then: string, alt: string) => makeOk(`(${test} ? ${then} : ${alt})`))
+        (convertL30CExpToJS(compExp.test), convertL30CExpToJS(compExp.then), convertL30CExpToJS(compExp.alt)) :
+    isProcExp(compExp) ? convertL30ProcExpToJS(compExp) :
+    isLetExp(compExp) ? convertL30CompoundExpToJS(rewriteLet(compExp)) :
+    isAppExp(compExp) ?
+        (
+            isPrimOp(compExp.rator) ? convertAppPrimOpToJS(compExp.rator, compExp.rands) :
+            safe2((rator: string, rands: string[]) => makeOk(`${rator}(${rands.join(",")})`))
+            (convertL30CExpToJS(compExp.rator), mapResult(convertL30CExpToJS, compExp.rands))
+        ) :
+    isLitExp(compExp) ? convertL30SExpToJS(compExp) :
+    makeFailure("unknown compound expression: " + compExp.tag)
 
 export const convertPrimOpToJS = (op: string) : string =>
     op === "not" ? "!" :
-    op === "eq?" || op === "=" ? "===" :
-    op === "string=?" || op === "string?" ? "(x) => typeof (x) === string" :
-    op === "number?" ? "(x) => typeof (x) === number" :
-    op === "boolean?" ? "(x) => typeof (x) === boolean" :
-    op === "symbol?" ? "(x) => typeof (x) === symbol" :
+    op === "eq?" || op === "=" || op === "string=?" ? "===" :
+    op === "string?" ? '((x) => (typeof (x) === string))' :
+    op === "number?" ? "((x) => (typeof (x) === number))" :
+    op === "boolean?" ? "((x) => (typeof (x) === boolean))" :
+    op === "symbol?" ? "((x) => (typeof (x) === symbol))" :
     op
 
 export const convertAppPrimOpToJS = (rator: PrimOp, rands: CExp[]): Result<string> =>
     rator.op === "not" ? bind(convertL30CExpToJS(rands[0]), (rand : string) => makeOk("(!" + rand + ")")) :
-    rator.op === "number?" || rator.op === "boolean?" ? bind(convertL30CExpToJS(rands[0]), (rand : string) => makeOk(`${convertPrimOpToJS(rator.op)}(${rands[0]})`)) :
+    rator.op === "number?" || rator.op === "boolean?" ? bind(convertL30CExpToJS(rands[0]), (rand : string) => makeOk(`(${convertPrimOpToJS(rator.op)}(${rands[0]}))`)) :
     bind(mapResult(convertL30CExpToJS,rands), (rands) => makeOk("(" + rands.join(" " + convertPrimOpToJS(rator.op) + " ") + ")"));
 
+export const convertL30SExpToJS = (sExp: LitExp): Result<string> =>
+    isSymbolSExp(sExp.val) ? makeOk('Symbol.for(\"' + sExp.val.val + '\")') :
+    makeFailure(sExp.val.toString())
 
+export const convertL30ProcExpToJS = (procExp: ProcExp): Result<string> =>
+    procExp.body.length === 1 ?
+        (
+            bind(convertL30CExpToJS(procExp.body[procExp.body.length-1]), body => makeOk("(" + "(" +
+            map((p) => p.var, procExp.args).join(",") + ") => " + body + ")"))
+        ) :
+    bind(mapResult(convertL30CExpToJS, procExp.body),
+        body => makeOk("((" +
+            map((p) => p.var, procExp.args).join(",") +
+            ") => {" +
+            body.slice(0,body.length-1).join("; ") +
+            "; return " +
+            body[body.length-1] +
+            ";})"))
